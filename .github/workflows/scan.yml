@@ -1,21 +1,28 @@
-name: Docker Scout Scan
+name: SBOM/SCA Scout
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  build-and-scan:
+  scout:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       packages: write
+      security-events: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
-      - name: Log in to GHCR
+      - name: Login to Dockerhub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Login to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -29,10 +36,24 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/devsecops-scanner:latest
 
-      - name: Docker Scout Scan
+      - name: Docker Scout
         uses: docker/scout-action@v1
         with:
-          command: cves
+          command: cves,recommendations,sbom
           image: ghcr.io/${{ github.repository_owner }}/devsecops-scanner:latest
-          registry-user: ${{ github.actor }}
-          registry-password: ${{ secrets.GITHUB_TOKEN }}
+          exit-code: false
+          sarif-file: sca_scout.sarif
+          output: sbom_scout.spdx.json
+          format: spdx
+
+      - name: Upload SARIF file as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sca_scout.sarif
+          path: sca_scout.sarif
+
+      - name: Upload SBOM file as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom_scout.spdx.json
+          path: sbom_scout.spdx.json
